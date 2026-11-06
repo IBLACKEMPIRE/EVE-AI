@@ -86,6 +86,8 @@ class Agent(
 
     fun conversation(): List<ChatMessage> = synchronized(history) { history.toList() }
     fun resetConversation() = synchronized(history) { history.clear() }
+    /** Used when the runtime rebuilds the agent after a settings change, so the chat continues. */
+    fun restoreConversation(messages: List<ChatMessage>) = synchronized(history) { history.clear(); history.addAll(messages.takeLast(config.historyLimit * 2)) }
 
     suspend fun run(userText: String, approvals: ApprovalGateway, keepInHistory: Boolean = true): AgentResult = mutex.withLock {
         val task = tasks.create(userText)
