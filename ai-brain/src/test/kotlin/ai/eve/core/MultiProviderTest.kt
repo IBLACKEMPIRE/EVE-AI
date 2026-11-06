@@ -4,7 +4,6 @@ import ai.eve.core.llm.*
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class MultiProviderTest {
@@ -17,11 +16,11 @@ class MultiProviderTest {
         val router = MultiProviderClient(listOf(provider("first") { throw LlmException("timeout") }, provider("second") { LlmResponse("ok") }))
         assertEquals("ok", router.complete(req).text)
     }
-    @Test fun nonRetryableErrorsDoNotLeakToNextProvider() = runBlocking {
+    @Test fun invalidCredentialsFallBackToNextConfiguredProvider() = runBlocking {
         var called = false
         val router = MultiProviderClient(listOf(provider("first") { throw LlmException("invalid key", retryable = false) }, provider("second") { called = true; LlmResponse("oops") }))
-        assertFailsWith<LlmException> { router.complete(req) }
-        assertTrue(!called)
+        assertEquals("oops", router.complete(req).text)
+        assertTrue(called)
     }
     @Test fun collaborationLabelsProvidersOnlyWithoutTools() = runBlocking {
         val router = MultiProviderClient(listOf(provider("A") { LlmResponse("one") }, provider("B") { LlmResponse("two") }), true)
