@@ -2,7 +2,7 @@
 
 Android-first AI assistant with a future photorealistic 3D avatar, voice conversation, persistent memory, and permission-controlled background tasks.
 
-> **Status:** Phase 1 audit complete. Android MVP foundation code added; **not yet verified as buildable** (waiting on the first green CI run and a device smoke test). The 3D avatar is not implemented; a 2D placeholder stands in.
+> **Status:** Phase 1 audit complete. The Android MVP foundation **builds, passes unit tests and lint in CI** (debug APK produced). It has **not yet been smoke-tested on a physical device**. The 3D avatar is not implemented; a 2D placeholder stands in.
 
 ## Goals
 - Android application with voice and text conversation
@@ -23,7 +23,7 @@ These are **references, not integrated dependencies**. The audit is in [docs/REF
 ## Repository structure
 - `docs/`: [architecture](docs/ARCHITECTURE.md), [roadmap](docs/ROADMAP.md), [audit](docs/REFERENCE_AUDIT.md), [reuse map](docs/REUSE_MAP.md), [MVP plan](docs/MVP_PLAN.md), [open decisions](docs/DECISIONS.md), [licensing](docs/DEPENDENCIES_LICENSING.md), [avatar pipeline](docs/AVATAR_PIPELINE.md)
 - `ai-brain/`: agent orchestration, safety policy, memory, audit (pure Kotlin, portable). **Implemented, 25 unit tests**
-- `android-app/`: Android host application (Kotlin + Compose). **MVP implemented, build pending**
+- `android-app/`: Android host application (Kotlin + Compose). **MVP implemented; CI build green; device test pending**
 - `voice-engine/`: speech pipeline. Currently `android-app/.../voice/`; extracted at M3
 - `avatar-engine/`: avatar rendering and animation. Placeholder in `android-app/.../avatar/`; Unity module at M4
 - `background-services/`: scheduled tasks and notifications (M5, not started)

@@ -3,7 +3,7 @@
 | # | Milestone | Scope | Status |
 |---|---|---|---|
 | 1 | **Audit** | Verify reference repositories, licenses, build systems, APIs, maintenance and reuse strategy | ✅ Done: [REFERENCE_AUDIT.md](REFERENCE_AUDIT.md), [REUSE_MAP.md](REUSE_MAP.md), [DECISIONS.md](DECISIONS.md) |
-| 2 | **Android shell** | Launchable app with basic navigation, permissions and placeholder avatar | 🟡 Code in PR; awaiting a green CI build and the device smoke test ([MVP_PLAN.md](MVP_PLAN.md)) |
+| 2 | **Android shell** | Launchable app with basic navigation, permissions and placeholder avatar | 🟡 Builds and passes tests + lint in CI; **device smoke test pending** ([MVP_PLAN.md](MVP_PLAN.md)) |
 | 3 | **Conversation** | Voice/text input, AI response, speech output and minimal secure memory | 🟡 Basic version in the same PR; hardening (voice-engine module, context trimming, locales) after M2 is verified |
 | 4 | **Avatar** | Import the custom rigged EVE model; animate face, lips, body and gestures | ⏳ Blocked on D2–D4 |
 | 5 | **Background** | Scheduled tasks, notifications, explicit approvals and activity history | ⏳ Approvals and activity history exist; WorkManager and notifications not started |

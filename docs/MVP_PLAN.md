@@ -41,10 +41,10 @@ tools/test-core.sh            runs ai-brain tests without Gradle
 | # | Check | Command | Status |
 |---|---|---|---|
 | 1 | ai-brain unit tests (25) | `./tools/test-core.sh` (kotlinc) | ✅ passed 25/25 on 6 Nov 2026 |
-| 2 | ai-brain tests via Gradle | `./gradlew :ai-brain:test` | ⏳ CI |
-| 3 | App unit tests (Claude mapping, 3) | `./gradlew :android-app:testDebugUnitTest` | ⏳ CI |
-| 4 | Lint | `./gradlew :android-app:lintDebug` | ⏳ CI |
-| 5 | Debug APK | `./gradlew :android-app:assembleDebug` | ⏳ CI |
+| 2 | ai-brain tests via Gradle | `./gradlew :ai-brain:test` | ✅ passed in GitHub Actions (commit `5ad6823`) |
+| 3 | App unit tests (Claude mapping, 3) | `./gradlew :android-app:testDebugUnitTest` | ✅ passed in GitHub Actions (`5ad6823`) |
+| 4 | Lint | `./gradlew :android-app:lintDebug` | ✅ passed in GitHub Actions (`5ad6823`) |
+| 5 | Debug APK | `./gradlew :android-app:assembleDebug` | ✅ built in GitHub Actions (`5ad6823`); artifact `eve-debug-apk` |
 | 6 | Device smoke test | the steps below, on a physical phone | ⏳ needs you |
 
 ### Device smoke test
