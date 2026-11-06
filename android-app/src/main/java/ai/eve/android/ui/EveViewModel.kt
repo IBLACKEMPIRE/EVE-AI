@@ -45,8 +45,17 @@ class EveViewModel(app: Application) : AndroidViewModel(app) {
     var stopEngaged by mutableStateOf(rt.stop.isEngaged); private set
     var notice by mutableStateOf<String?>(null)
     var avatarVisible by mutableStateOf(true)
-    var keyConfigured by mutableStateOf(!rt.settings.apiKey().isNullOrBlank()); private set
-    val modelName: String get() = rt.settings.model()
+    var keyConfigured by mutableStateOf(listOf("anthropic","openai","google").any { !rt.settings.providerKey(it).isNullOrBlank() }); private set
+    val modelName: String get() = rt.agent.toString().let { rt.llm().name }
+    fun hasProvider(provider: String) = !rt.settings.providerKey(provider).isNullOrBlank()
+    val collaboration: Boolean get() = rt.settings.collaboration
+    fun saveMultiProvider(openai: String?, google: String?, enabled: Boolean) {
+        if (openai != null) rt.settings.setProviderKey("openai", openai)
+        if (google != null) rt.settings.setProviderKey("google", google)
+        rt.settings.collaboration = enabled
+        rt.rebuildAgent()
+        keyConfigured = listOf("anthropic","openai","google").any { hasProvider(it) }
+    }
     val speakReplies: Boolean get() = rt.settings.speakReplies
 
     private var job: Job? = null
@@ -128,7 +137,7 @@ class EveViewModel(app: Application) : AndroidViewModel(app) {
         rt.settings.setModel(model)
         rt.settings.speakReplies = speak
         rt.rebuildAgent()
-        keyConfigured = !rt.settings.apiKey().isNullOrBlank()
+        keyConfigured = listOf("anthropic","openai","google").any { hasProvider(it) }
         lines += ChatLine(false, if (keyConfigured) "Connected to ${rt.settings.model()}. Conversation restarted." else "No API key — running in offline demo mode.")
     }
 
