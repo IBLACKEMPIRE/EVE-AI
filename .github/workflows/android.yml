@@ -21,6 +21,9 @@ jobs:
       # single annotation so failures are readable from the PR checks view.
       - name: Unit tests (ai-brain + android-app)
         run: ./tools/ci-gradle.sh unit-tests :ai-brain:test :android-app:testDebugUnitTest
+      - name: Unit test summary
+        if: always()
+        run: python3 tools/test-summary.py
       - name: Lint
         run: ./tools/ci-gradle.sh lint :android-app:lintDebug
       - name: Build debug APK
