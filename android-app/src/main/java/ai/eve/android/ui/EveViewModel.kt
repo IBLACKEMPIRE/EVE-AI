@@ -47,6 +47,7 @@ class EveViewModel(app: Application) : AndroidViewModel(app) {
     var avatarVisible by mutableStateOf(true)
     var keyConfigured by mutableStateOf(listOf("anthropic","openai","google").any { !rt.settings.providerKey(it).isNullOrBlank() }); private set
     val modelName: String get() = rt.llm().name
+    val anthropicModel: String get() = rt.settings.model()
     fun hasProvider(provider: String) = !rt.settings.providerKey(provider).isNullOrBlank()
     val collaboration: Boolean get() = rt.settings.collaboration
     fun saveMultiProvider(openai: String?, google: String?, enabled: Boolean) {
