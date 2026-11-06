@@ -61,6 +61,7 @@ class Agent(
 ) {
     private val history = mutableListOf<ChatMessage>()
     private val mutex = Mutex()
+    private var lastLlmFailure: String = "Unknown provider failure"
 
     fun conversation(): List<ChatMessage> = synchronized(history) { history.toList() }
     fun resetConversation() = synchronized(history) { history.clear() }
@@ -87,7 +88,7 @@ class Agent(
                 if (stop.isEngaged) return finish(task.id, TaskStatus.CANCELLED, "Stopped by emergency stop.", "concerned", steps, working, keepInHistory)
                 steps++
                 val response = callWithRetry(task.id, LlmRequest(system, working, tools.specs()))
-                    ?: return finish(task.id, TaskStatus.FAILED, "I couldn't reach my reasoning service. Please check the connection or API key and try again.", "concerned", steps, working, keepInHistory)
+                    ?: return finish(task.id, TaskStatus.FAILED, "AI connection failed: $lastLlmFailure. Check the API keys, model IDs and billing.", "concerned", steps, working, keepInHistory)
 
                 if (response.toolCalls.isEmpty()) {
                     val (emotion, text) = splitEmotion(response.text, response.emotion)
@@ -150,6 +151,10 @@ class Agent(
                 return llm.complete(req)
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 val retryable = (e as? LlmException)?.retryable ?: true
+                lastLlmFailure = when (e) {
+                    is LlmException -> e.message ?: "provider error"
+                    else -> "unexpected client error (${e::class.simpleName})"
+                }
                 audit.record(AuditKind.LLM_ERROR, taskId, "${e::class.simpleName} (message redacted)")
                 if (!retryable || attempt >= config.retry.maxAttempts) return null
                 sleeper(config.retry.delayFor(attempt))
