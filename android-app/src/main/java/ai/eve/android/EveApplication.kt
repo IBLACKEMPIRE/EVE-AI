@@ -2,6 +2,9 @@ package ai.eve.android
 
 import android.app.Application
 import ai.eve.android.llm.AnthropicClient
+import ai.eve.android.llm.OpenAiClient
+import ai.eve.android.llm.GeminiClient
+import ai.eve.core.llm.MultiProviderClient
 import ai.eve.android.security.SecureSettings
 import ai.eve.android.tools.AndroidTools
 import ai.eve.core.agent.Agent
@@ -44,7 +47,15 @@ class EveRuntime(app: Application) {
 
     fun llm(): LlmClient {
         val key = settings.apiKey()
-        return if (key.isNullOrBlank()) MockLlmClient() else AnthropicClient(key, settings.model())
+        val clients = mutableListOf<LlmClient>()
+        if (!key.isNullOrBlank()) clients += AnthropicClient(key, settings.model())
+        settings.providerKey("openai")?.takeIf { it.isNotBlank() }?.let { clients += OpenAiClient(it, "gpt-4.1-mini") }
+        settings.providerKey("google")?.takeIf { it.isNotBlank() }?.let { clients += GeminiClient(it, "gemini-2.5-flash") }
+        return when (clients.size) {
+            0 -> MockLlmClient()
+            1 -> clients.first()
+            else -> MultiProviderClient(clients, settings.collaboration)
+        }
     }
 
     /** Rebuild after the API key or model changes. Conversation history resets. */

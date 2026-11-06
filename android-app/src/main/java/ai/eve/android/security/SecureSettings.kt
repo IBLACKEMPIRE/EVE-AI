@@ -25,6 +25,23 @@ class SecureSettings(context: Context) {
         prefs.edit().apply { if (v.isNullOrEmpty()) remove(K_API) else putString(K_API, encrypt(v)) }.apply()
     }
 
+    fun providerKey(provider: String): String? {
+        if (provider == "anthropic") return apiKey()
+        return prefs.getString("key_$provider", null)?.let { runCatching { decrypt(it) }.getOrNull() }
+    }
+    fun setProviderKey(provider: String, value: String?) {
+        if (provider == "anthropic") { setApiKey(value); return }
+        require(provider in setOf("openai", "google"))
+        val cleaned = value?.trim()
+        prefs.edit().apply {
+            if (cleaned.isNullOrBlank()) remove("key_$provider")
+            else putString("key_$provider", encrypt(cleaned))
+        }.apply()
+    }
+    var collaboration: Boolean
+        get() = prefs.getBoolean("collaboration", true)
+        set(v) = prefs.edit().putBoolean("collaboration", v).apply()
+
     fun model(): String = prefs.getString(K_MODEL, null)?.takeIf { it.isNotBlank() } ?: DEFAULT_MODEL
     fun setModel(value: String) = prefs.edit().putString(K_MODEL, value.trim()).apply()
 

@@ -192,11 +192,19 @@ private fun SettingsScreen(vm: EveViewModel) {
     var key by remember { mutableStateOf("") }
     var model by remember { mutableStateOf(vm.modelName) }
     var speak by remember { mutableStateOf(vm.speakReplies) }
+    var openaiKey by remember { mutableStateOf("") }
+    var googleKey by remember { mutableStateOf("") }
+    var collaborate by remember { mutableStateOf(vm.collaboration) }
     var memories by remember { mutableStateOf(vm.memories()) }
     var confirmClear by remember { mutableStateOf(false) }
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { Text("AI service", fontWeight = FontWeight.Bold) }
+        item { Text("AI service — automatic provider selection", fontWeight = FontWeight.Bold) }
+        item { Text("Each configured provider may receive your prompts. Collaboration sends read-only prompts to multiple providers.", fontSize = 12.sp) }
+        item { OutlinedTextField(openaiKey, { openaiKey = it }, Modifier.fillMaxWidth(), label = { Text(if (vm.hasProvider("openai")) "OpenAI key (saved — enter to replace)" else "OpenAI API key") }, visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+        item { OutlinedTextField(googleKey, { googleKey = it }, Modifier.fillMaxWidth(), label = { Text(if (vm.hasProvider("google")) "Google key (saved — enter to replace)" else "Google Gemini API key") }, visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+        item { Row(verticalAlignment = Alignment.CenterVertically) { Text("Multi-AI collaboration", Modifier.weight(1f)); Switch(collaborate, { collaborate = it }) } }
+        item { Button({ vm.saveMultiProvider(openaiKey.ifBlank { null }, googleKey.ifBlank { null }, collaborate); openaiKey = ""; googleKey = "" }) { Text("Save AI providers") } }
         item {
             OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), label = { Text(if (vm.keyConfigured) "Anthropic API key (saved — enter to replace)" else "Anthropic API key") },
                 visualTransformation = PasswordVisualTransformation(), singleLine = true)
