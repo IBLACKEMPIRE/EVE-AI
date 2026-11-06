@@ -67,7 +67,7 @@ class Agent(
 
     suspend fun run(userText: String, approvals: ApprovalGateway, keepInHistory: Boolean = true): AgentResult = mutex.withLock {
         val task = tasks.create(userText)
-        audit.record(AuditKind.USER_INPUT, task.id, userText.take(500))
+        audit.record(AuditKind.USER_INPUT, task.id, "received user message (content redacted)")
         if (stop.isEngaged) {
             tasks.update(task.id, TaskStatus.CANCELLED, "emergency stop engaged")
             return AgentResult(task.id, TaskStatus.CANCELLED, "I'm paused by the emergency stop. Release it in settings to continue.", "concerned", 0)
@@ -137,7 +137,7 @@ class Agent(
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             ToolResult.error("Tool failed: ${e.message ?: e::class.simpleName}")
         }
-        audit.record(AuditKind.TOOL_RESULT, taskId, "$name ok=${result.ok} ${result.output.take(200)}")
+        audit.record(AuditKind.TOOL_RESULT, taskId, "$name ok=${result.ok} (output redacted)")
         return result
     }
 
@@ -150,7 +150,7 @@ class Agent(
                 return llm.complete(req)
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 val retryable = (e as? LlmException)?.retryable ?: true
-                audit.record(AuditKind.LLM_ERROR, taskId, "${e::class.simpleName}: ${e.message?.take(200)}")
+                audit.record(AuditKind.LLM_ERROR, taskId, "${e::class.simpleName} (message redacted)")
                 if (!retryable || attempt >= config.retry.maxAttempts) return null
                 sleeper(config.retry.delayFor(attempt))
             }
