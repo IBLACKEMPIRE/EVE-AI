@@ -1,0 +1,40 @@
+name: Android build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v5
+
+      # Each step tees Gradle output and, on failure, re-emits the key error lines as a
+      # single annotation so failures are readable from the PR checks view.
+      - name: Unit tests (ai-brain + android-app)
+        run: ./tools/ci-gradle.sh unit-tests :ai-brain:test :android-app:testDebugUnitTest
+      - name: Lint
+        run: ./tools/ci-gradle.sh lint :android-app:lintDebug
+      - name: Build debug APK
+        run: ./tools/ci-gradle.sh assemble :android-app:assembleDebug
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: eve-debug-apk
+          path: android-app/build/outputs/apk/debug/android-app-debug.apk
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: reports-and-logs
+          path: |
+            ai-brain/build/reports
+            android-app/build/reports
+            build-logs/
