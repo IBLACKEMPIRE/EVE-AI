@@ -21,10 +21,26 @@ jobs:
       # single annotation so failures are readable from the PR checks view.
       - name: Unit tests (ai-brain + android-app)
         run: ./tools/ci-gradle.sh unit-tests :ai-brain:test :android-app:testDebugUnitTest
+      - name: Unit test summary
+        if: always()
+        run: python3 tools/test-summary.py
       - name: Lint
         run: ./tools/ci-gradle.sh lint :android-app:lintDebug
       - name: Build debug APK
         run: ./tools/ci-gradle.sh assemble :android-app:assembleDebug
+
+      - name: Verify APK contents
+        run: |
+          APK=android-app/build/outputs/apk/debug/android-app-debug.apk
+          AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt2
+          "$AAPT2" dump badging "$APK" | grep -E "^package:|sdkVersion|targetSdkVersion"
+          "$AAPT2" dump badging "$APK" | grep -q "package: name='ai.eve.android'" || { echo "::error::unexpected applicationId"; exit 1; }
+          unzip -o -q "$APK" 'classes*.dex' -d apk-dex
+          for c in ai/eve/android/ui/SettingsScreenKt ai/eve/core/providers/AnthropicProvider ai/eve/core/providers/OpenAiProvider \
+                   ai/eve/core/providers/GeminiProvider ai/eve/core/llm/ProviderRouter ai/eve/core/llm/CollaborationEngine; do
+            if cat apk-dex/*.dex | grep -a -q "L$c;"; then echo "present: $c"; else echo "::error::missing from APK: $c"; exit 1; fi
+          done
+          ls -l "$APK"
 
       - uses: actions/upload-artifact@v5
         with:
@@ -38,3 +54,22 @@ jobs:
             ai-brain/build/reports
             android-app/build/reports
             build-logs/
+
+  # Manual only: real API calls with keys stored as GitHub Actions secrets
+  # (EVE_ANTHROPIC_API_KEY, EVE_OPENAI_API_KEY, EVE_GEMINI_API_KEY). Never runs on PRs.
+  live-smoke:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Live provider smoke test
+        env:
+          EVE_ANTHROPIC_API_KEY: ${{ secrets.EVE_ANTHROPIC_API_KEY }}
+          EVE_OPENAI_API_KEY: ${{ secrets.EVE_OPENAI_API_KEY }}
+          EVE_GEMINI_API_KEY: ${{ secrets.EVE_GEMINI_API_KEY }}
+        run: ./tools/ci-gradle.sh live-smoke :ai-brain:liveSmoke

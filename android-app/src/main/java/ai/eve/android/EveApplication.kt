@@ -1,23 +1,33 @@
 package ai.eve.android
 
 import android.app.Application
-import ai.eve.android.llm.AnthropicClient
-import ai.eve.android.llm.OpenAiClient
-import ai.eve.android.llm.GeminiClient
-import ai.eve.core.llm.MultiProviderClient
 import ai.eve.android.security.SecureSettings
 import ai.eve.android.tools.AndroidTools
 import ai.eve.core.agent.Agent
+import ai.eve.core.audit.AuditKind
 import ai.eve.core.audit.FileAuditLog
+import ai.eve.core.llm.CollaborationEngine
+import ai.eve.core.llm.ConnectionReport
+import ai.eve.core.llm.ConnectionTester
+import ai.eve.core.llm.ErrorKind
 import ai.eve.core.llm.LlmClient
+import ai.eve.core.llm.LlmException
 import ai.eve.core.llm.MockLlmClient
+import ai.eve.core.llm.ProviderId
+import ai.eve.core.llm.ProviderRouter
+import ai.eve.core.llm.RoutingPolicy
 import ai.eve.core.memory.FileMemoryStore
 import ai.eve.core.policy.EmergencyStop
 import ai.eve.core.policy.PolicyEngine
+import ai.eve.core.providers.AnthropicProvider
+import ai.eve.core.providers.GeminiProvider
+import ai.eve.core.providers.OpenAiProvider
+import ai.eve.core.providers.ProviderClient
 import ai.eve.core.tasks.TaskTracker
 import ai.eve.core.tools.CoreTools
 import ai.eve.core.tools.ToolRegistry
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /** Process-wide composition root. Kept deliberately simple (no DI framework) for the prototype. */
 class EveApplication : Application() {
@@ -29,6 +39,9 @@ class EveApplication : Application() {
         runtime = EveRuntime(this)
     }
 }
+
+/** Last known health of a provider, from a test or a real request. Safe to display. */
+data class ProviderHealth(val ok: Boolean, val message: String, val at: Long)
 
 class EveRuntime(app: Application) {
     val settings = SecureSettings(app)
@@ -43,25 +56,58 @@ class EveRuntime(app: Application) {
         AndroidTools.all(app, tasks).forEach(::register)
     }
 
-    @Volatile var agent: Agent = buildAgent(); private set
+    val health = ConcurrentHashMap<ProviderId, ProviderHealth>()
+    @Volatile var onHealthChanged: () -> Unit = {}
 
-    fun llm(): LlmClient {
-        val key = settings.apiKey()
-        val clients = mutableListOf<LlmClient>()
-        if (!key.isNullOrBlank()) clients += AnthropicClient(key, settings.model())
-        settings.providerKey("openai")?.takeIf { it.isNotBlank() }?.let { clients += OpenAiClient(it, "gpt-4.1-mini") }
-        settings.providerKey("google")?.takeIf { it.isNotBlank() }?.let { clients += GeminiClient(it, "gemini-2.5-flash") }
-        return when (clients.size) {
-            0 -> MockLlmClient()
-            1 -> clients.first()
-            else -> MultiProviderClient(clients, settings.collaboration)
-        }
+    init {
+        if (settings.migratedCorruptModel) audit.record(AuditKind.TASK_STATUS, null, "settings migration: removed invalid saved model ID")
     }
 
-    /** Rebuild after the API key or model changes. Conversation history resets. */
-    fun rebuildAgent() { agent = buildAgent() }
+    @Volatile var agent: Agent = buildAgent(); private set
 
-    private fun buildAgent() = Agent(llm(), tools, policy, stop, memory, audit, tasks)
+    fun client(id: ProviderId, key: String, model: String): ProviderClient = when (id) {
+        ProviderId.ANTHROPIC -> AnthropicProvider(key, model)
+        ProviderId.OPENAI -> OpenAiProvider(key, model)
+        ProviderId.GEMINI -> GeminiProvider(key, model)
+    }
+
+    /** Providers the user has enabled and given a readable key, in default order. */
+    fun activeProviders(): List<ProviderClient> = ProviderId.entries
+        .filter { settings.enabled(it) }
+        .mapNotNull { id -> settings.key(id)?.let { client(id, it, settings.model(id)) } }
+
+    fun llm(providers: List<ProviderClient> = activeProviders()): LlmClient =
+        if (providers.isEmpty()) MockLlmClient()
+        else ProviderRouter(providers, RoutingPolicy(settings.mode, settings.preferred, settings.fallback), ::recordOutcome)
+
+    /** Rebuild after a settings change. The conversation is carried over. */
+    fun rebuildAgent() {
+        val history = agent.conversation()
+        agent = buildAgent().also { it.restoreConversation(history) }
+    }
+
+    private fun buildAgent(): Agent {
+        val providers = activeProviders()
+        val collaborator = if (settings.collaboration && providers.size >= 2) CollaborationEngine(providers, settings.preferred) else null
+        return Agent(llm(providers), tools, policy, stop, memory, audit, tasks, collaborator = collaborator)
+    }
+
+    private fun recordOutcome(id: ProviderId, e: LlmException?) {
+        health[id] = if (e == null) ProviderHealth(true, "Last request succeeded", System.currentTimeMillis())
+        else ProviderHealth(false, "Last request failed: ${e.kind.summary} — ${ConnectionReport.hint(e.kind)}", System.currentTimeMillis())
+        onHealthChanged()
+    }
+
+    /** Tests one provider with its saved key and model, even if it is currently disabled. */
+    suspend fun testProvider(id: ProviderId): ConnectionReport {
+        val key = settings.key(id)
+        val report = if (key == null) ConnectionReport(id, settings.model(id), false, ErrorKind.NOT_CONFIGURED, 0)
+        else ConnectionTester.test(client(id, key, settings.model(id)))
+        health[id] = ProviderHealth(report.ok, report.message, System.currentTimeMillis())
+        audit.record(AuditKind.LLM_CALL, null, "connection test ${id.key}: ${if (report.ok) "ok" else report.kind?.name}")
+        onHealthChanged()
+        return report
+    }
 }
 
 val Application.eve: EveRuntime get() = (this as EveApplication).runtime

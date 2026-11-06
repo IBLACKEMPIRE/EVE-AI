@@ -13,3 +13,12 @@ dependencies {
     testImplementation(kotlin("test-junit"))
     testImplementation(libs.junit)
 }
+
+// Optional live API smoke test (needs EVE_*_API_KEY env vars; never runs as part of `test`).
+tasks.register<JavaExec>("liveSmoke") {
+    group = "verification"
+    description = "Calls the real Claude/GPT/Gemini APIs with keys from EVE_*_API_KEY environment variables."
+    dependsOn("testClasses")
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("ai.eve.core.live.LiveSmokeKt")
+}

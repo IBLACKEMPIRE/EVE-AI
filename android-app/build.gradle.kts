@@ -52,5 +52,4 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(kotlin("test-junit"))
-    testImplementation(libs.org.json) // real org.json on the JVM (Android's is stubbed in unit tests)
 }

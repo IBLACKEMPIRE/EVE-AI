@@ -44,7 +44,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -52,7 +51,7 @@ import ai.eve.android.avatar.PlaceholderAvatar
 import java.text.DateFormat
 import java.util.Date
 
-private val Accent = Color(0xFF8E7CFF)
+internal val Accent = Color(0xFF8E7CFF)
 
 @Composable
 fun EveTheme(content: @Composable () -> Unit) = MaterialTheme(
@@ -96,7 +95,7 @@ private fun TopBar(vm: EveViewModel, screen: Screen, go: (Screen) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).padding(start = 8.dp)) {
             Text("EVE", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-            Text(if (vm.keyConfigured) vm.modelName else "offline demo", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(vm.routingLabel, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
         TextButton({ go(Screen.CHAT) }, enabled = screen != Screen.CHAT) { Text("Chat") }
         TextButton({ go(Screen.TASKS) }, enabled = screen != Screen.TASKS) { Text("Tasks") }
@@ -156,12 +155,14 @@ private fun ChatScreen(vm: EveViewModel) {
 @Composable
 private fun Bubble(line: ChatLine) {
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = if (line.fromUser) Arrangement.End else Arrangement.Start) {
-        Text(
-            line.text,
+        Column(
             Modifier.widthIn(max = 300.dp)
                 .background(if (line.fromUser) Accent.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
                 .padding(horizontal = 12.dp, vertical = 8.dp),
-        )
+        ) {
+            Text(line.text)
+            line.meta?.let { Text(it, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)) }
+        }
     }
 }
 
@@ -185,69 +186,4 @@ private fun TasksScreen(vm: EveViewModel) {
         item { HorizontalDivider(Modifier.padding(vertical = 12.dp)); Text("Audit log (latest first)", fontWeight = FontWeight.Bold) }
         items(audit) { e -> Text("${fmt.format(Date(e.timestamp))}  ${e.kind}  ${e.detail}", fontSize = 11.sp, modifier = Modifier.padding(vertical = 2.dp)) }
     }
-}
-
-@Composable
-private fun SettingsScreen(vm: EveViewModel) {
-    var key by remember { mutableStateOf("") }
-    var model by remember { mutableStateOf(vm.anthropicModel) }
-    var speak by remember { mutableStateOf(vm.speakReplies) }
-    var openaiKey by remember { mutableStateOf("") }
-    var googleKey by remember { mutableStateOf("") }
-    var collaborate by remember { mutableStateOf(vm.collaboration) }
-    var memories by remember { mutableStateOf(vm.memories()) }
-    var confirmClear by remember { mutableStateOf(false) }
-
-    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { Text("AI service — automatic provider selection", fontWeight = FontWeight.Bold) }
-        item { Text("Each configured provider may receive your prompts. Collaboration sends read-only prompts to multiple providers.", fontSize = 12.sp) }
-        item { OutlinedTextField(openaiKey, { openaiKey = it }, Modifier.fillMaxWidth(), label = { Text(if (vm.hasProvider("openai")) "OpenAI key (saved — enter to replace)" else "OpenAI API key") }, visualTransformation = PasswordVisualTransformation(), singleLine = true) }
-        item { OutlinedTextField(googleKey, { googleKey = it }, Modifier.fillMaxWidth(), label = { Text(if (vm.hasProvider("google")) "Google key (saved — enter to replace)" else "Google Gemini API key") }, visualTransformation = PasswordVisualTransformation(), singleLine = true) }
-        item { Row(verticalAlignment = Alignment.CenterVertically) { Text("Multi-AI collaboration", Modifier.weight(1f)); Switch(collaborate, { collaborate = it }) } }
-        item { Button({ vm.saveMultiProvider(openaiKey.ifBlank { null }, googleKey.ifBlank { null }, collaborate); openaiKey = ""; googleKey = "" }) { Text("Save AI providers") } }
-        item {
-            OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), label = { Text(if (vm.hasProvider("anthropic")) "Anthropic API key (saved — enter to replace)" else "Anthropic API key") },
-                visualTransformation = PasswordVisualTransformation(), singleLine = true)
-        }
-        item { OutlinedTextField(model, { model = it }, Modifier.fillMaxWidth(), label = { Text("Model") }, singleLine = true) }
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Speak replies aloud", Modifier.weight(1f)); Switch(speak, { speak = it })
-            }
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button({ vm.saveSettings(key.ifBlank { null }, model, speak); key = "" }) { Text("Save") }
-                if (vm.keyConfigured) OutlinedButton({ vm.saveSettings("", model, speak) }) { Text("Remove key") }
-            }
-        }
-        item { Text("The key is encrypted with a key held in the Android Keystore and is only sent to api.anthropic.com.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-
-        item { HorizontalDivider(); Text("Memory (${memories.size})", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp)) }
-        item { Text("EVE only stores what you ask her to remember. Stored on this device only.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        items(memories) { m ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(m.text, Modifier.weight(1f))
-                TextButton({ vm.forgetMemory(m.id); memories = vm.memories() }) { Text("Delete") }
-            }
-        }
-        if (memories.isNotEmpty()) item { OutlinedButton({ confirmClear = true }) { Text("Delete all memories") } }
-
-        item { HorizontalDivider(); Text("Permissions", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp)) }
-        item {
-            Text(
-                "• Microphone — only while the mic button is active.\n" +
-                    "• Calls and SMS are never sent silently: EVE opens the dialer/SMS app and you press Call/Send.\n" +
-                    "• Camera, Accessibility automation and the floating overlay are not used in this version.",
-                fontSize = 13.sp,
-            )
-        }
-    }
-    if (confirmClear) AlertDialog(
-        onDismissRequest = { confirmClear = false },
-        title = { Text("Delete all memories?") },
-        text = { Text("This permanently deletes ${memories.size} stored items.") },
-        confirmButton = { Button({ vm.clearMemories(); memories = vm.memories(); confirmClear = false }) { Text("Delete") } },
-        dismissButton = { TextButton({ confirmClear = false }) { Text("Cancel") } },
-    )
 }
