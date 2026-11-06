@@ -25,16 +25,23 @@ class MultiProviderClient(
             // Explicitly label separate model opinions. Do not pretend a local model synthesized them.
             return LlmResponse(answers.joinToString("\n\n") { (provider, answer) -> "[$provider]\n${answer.text}" })
         }
-        var last: Exception? = null
+        val failures = mutableListOf<String>()
         for (p in providers) {
             try { return p.complete(request) }
             catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: Exception) {
-                last = e
-                // Invalid request / credentials should not silently expose the prompt to another provider.
-                if (e is LlmException && !e.retryable) throw e
+                // The user explicitly configured automatic provider selection. Continue on
+                // provider-specific 4xx failures (e.g. unsupported model / expired key).
+                // Never expose raw exception messages, which can include private data.
+                val category = when {
+                    e.message?.contains("401") == true || e.message?.contains("403") == true -> "authentication"
+                    e.message?.contains("429") == true -> "rate limit or billing"
+                    e.message?.contains("400") == true || e.message?.contains("404") == true -> "model or request"
+                    else -> "network or service"
+                }
+                failures += "${p.name.substringBefore(':')}: $category"
             }
         }
-        throw LlmException("All configured providers failed", last, retryable = false)
+        throw LlmException("All configured providers failed — " + failures.joinToString("; "), retryable = false)
     }
 }
