@@ -47,7 +47,7 @@ import kotlin.random.Random
  * renderer implements the same interface (see docs/05-avatar-pipeline.md).
  */
 class AvatarStateHolder(private val scope: CoroutineScope) : AvatarController {
-    var mode by mutableStateOf(AvatarMode.IDLE); private set
+    var currentMode by mutableStateOf(AvatarMode.IDLE); private set
     var emotion by mutableStateOf(Emotion.NEUTRAL); private set
     var mouth by mutableFloatStateOf(0f); private set
     var level by mutableFloatStateOf(0f)
@@ -56,7 +56,7 @@ class AvatarStateHolder(private val scope: CoroutineScope) : AvatarController {
     var body by mutableStateOf(BodyState.IDLE_STAND); private set
     private var visemeJob: Job? = null
 
-    override fun setMode(mode: AvatarMode) { this.mode = mode }
+    override fun setMode(mode: AvatarMode) { currentMode = mode }
     override fun setEmotion(emotion: Emotion, intensity: Float) { this.emotion = emotion }
     override fun setMouthOpen(amount: Float) { mouth = amount.coerceIn(0f, 1f) }
     override fun playBody(state: BodyState) { body = state }
@@ -87,14 +87,14 @@ fun PlaceholderAvatar(state: AvatarStateHolder, modifier: Modifier = Modifier) {
         while (true) { delay(Random.nextLong(2200, 6000)); blink = true; delay(130); blink = false }
     }
     var saccade by remember { mutableStateOf(Offset.Zero) }
-    LaunchedEffect(state.mode) {
+    LaunchedEffect(state.currentMode) {
         while (true) {
             delay(Random.nextLong(900, 2600))
-            saccade = if (state.mode == AvatarMode.THINKING) Offset(0.5f, -0.6f) else Offset(Random.nextFloat() * 0.5f - 0.25f, Random.nextFloat() * 0.3f - 0.15f)
+            saccade = if (state.currentMode == AvatarMode.THINKING) Offset(0.5f, -0.6f) else Offset(Random.nextFloat() * 0.5f - 0.25f, Random.nextFloat() * 0.3f - 0.15f)
         }
     }
     val mouth by animateFloatAsState(state.mouth, tween(70), label = "mouth")
-    val eyeOpen by animateFloatAsState(if (blink || state.mode == AvatarMode.SLEEPING) 0.05f else 1f, tween(60), label = "eye")
+    val eyeOpen by animateFloatAsState(if (blink || state.currentMode == AvatarMode.SLEEPING) 0.05f else 1f, tween(60), label = "eye")
     val smile by animateFloatAsState(when (state.emotion) { Emotion.HAPPY -> 1f; Emotion.SAD, Emotion.CONCERNED -> -0.6f; else -> 0.2f }, label = "smile")
     val brow by animateFloatAsState(when (state.emotion) { Emotion.SURPRISED -> -1f; Emotion.CONCERNED, Emotion.SAD -> 0.7f; Emotion.THINKING -> 0.3f; else -> 0f }, label = "brow")
 
@@ -104,7 +104,7 @@ fun PlaceholderAvatar(state: AvatarStateHolder, modifier: Modifier = Modifier) {
         Canvas(Modifier.fillMaxWidth().height(260.dp)) {
             val cx = size.width / 2; val cy = size.height * 0.5f + sin(breath * Math.PI).toFloat() * 3f
             val headW = size.height * 0.52f; val headH = size.height * 0.66f
-            if (state.mode == AvatarMode.LISTENING) {
+            if (state.currentMode == AvatarMode.LISTENING) {
                 drawCircle(accent.copy(alpha = 0.18f + 0.25f * state.level), radius = headH * (0.62f + 0.06f * pulse + 0.1f * state.level), center = Offset(cx, cy))
             }
             // shoulders
@@ -149,7 +149,7 @@ fun PlaceholderAvatar(state: AvatarStateHolder, modifier: Modifier = Modifier) {
                 quadraticTo(cx, my + smile * mw * 0.25f, cx + mw / 2, my - smile * mw * 0.1f)
             }
             drawPath(curve, lips, style = Stroke(width = 5f))
-            if (state.mode == AvatarMode.THINKING) for (i in 0..2) {
+            if (state.currentMode == AvatarMode.THINKING) for (i in 0..2) {
                 drawCircle(accent.copy(alpha = if (((pulse * 3).toInt()) == i) 1f else 0.35f), 6f, Offset(cx + headW * 0.6f + i * 18f, cy - headH * 0.55f))
             }
         }

@@ -61,7 +61,7 @@ class EveViewModel(app: Application) : AndroidViewModel(app) {
         onLevel = { avatar.level = it },
         onEnd = { err ->
             listening = false; partial = ""
-            if (avatar.mode == AvatarMode.LISTENING) avatar.setMode(AvatarMode.IDLE)
+            if (avatar.currentMode == AvatarMode.LISTENING) avatar.setMode(AvatarMode.IDLE)
             if (err != null) notice = err
         })
 
