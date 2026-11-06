@@ -190,7 +190,7 @@ private fun TasksScreen(vm: EveViewModel) {
 @Composable
 private fun SettingsScreen(vm: EveViewModel) {
     var key by remember { mutableStateOf("") }
-    var model by remember { mutableStateOf(vm.modelName) }
+    var model by remember { mutableStateOf(vm.anthropicModel) }
     var speak by remember { mutableStateOf(vm.speakReplies) }
     var openaiKey by remember { mutableStateOf("") }
     var googleKey by remember { mutableStateOf("") }
@@ -206,7 +206,7 @@ private fun SettingsScreen(vm: EveViewModel) {
         item { Row(verticalAlignment = Alignment.CenterVertically) { Text("Multi-AI collaboration", Modifier.weight(1f)); Switch(collaborate, { collaborate = it }) } }
         item { Button({ vm.saveMultiProvider(openaiKey.ifBlank { null }, googleKey.ifBlank { null }, collaborate); openaiKey = ""; googleKey = "" }) { Text("Save AI providers") } }
         item {
-            OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), label = { Text(if (vm.keyConfigured) "Anthropic API key (saved — enter to replace)" else "Anthropic API key") },
+            OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), label = { Text(if (vm.hasProvider("anthropic")) "Anthropic API key (saved — enter to replace)" else "Anthropic API key") },
                 visualTransformation = PasswordVisualTransformation(), singleLine = true)
         }
         item { OutlinedTextField(model, { model = it }, Modifier.fillMaxWidth(), label = { Text("Model") }, singleLine = true) }
