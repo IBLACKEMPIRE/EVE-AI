@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LifecycleResumeEffect
+import android.view.MotionEvent
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
@@ -32,6 +34,11 @@ fun Eve3DAvatar(state: AvatarStateHolder, modifier: Modifier = Modifier) {
     renderer.mode = state.currentMode.name
     renderer.lookX = state.lookX
     renderer.lookY = state.lookY
+    val surface = remember { arrayOfNulls<GLSurfaceView>(1) }
+    LifecycleResumeEffect(renderer) {
+        surface[0]?.onResume()
+        onPauseOrDispose { surface[0]?.onPause() }
+    }
     AndroidView(
         modifier = modifier.fillMaxWidth().height(350.dp),
         factory = { context ->
@@ -39,12 +46,50 @@ fun Eve3DAvatar(state: AvatarStateHolder, modifier: Modifier = Modifier) {
                 setEGLContextClientVersion(2)
                 setRenderer(renderer)
                 renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
+                var previousX = 0f
+                var previousDistance = 0f
                 setOnTouchListener { _, event ->
-                    if (event.action == android.view.MotionEvent.ACTION_MOVE) {
-                        renderer.rotation += event.historySize.let { 0.7f }
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            previousX = event.x
+                            true
+                        }
+                        MotionEvent.ACTION_POINTER_DOWN -> {
+                            if (event.pointerCount >= 2) {
+                                previousDistance = kotlin.math.hypot(
+                                    event.getX(1) - event.getX(0),
+                                    event.getY(1) - event.getY(0),
+                                )
+                            }
+                            true
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            if (event.pointerCount >= 2) {
+                                val distance = kotlin.math.hypot(
+                                    event.getX(1) - event.getX(0),
+                                    event.getY(1) - event.getY(0),
+                                )
+                                if (previousDistance > 0f) {
+                                    renderer.distance = (renderer.distance * previousDistance /
+                                        distance.coerceAtLeast(1f)).coerceIn(5.5f, 11f)
+                                }
+                                previousDistance = distance
+                            } else {
+                                renderer.rotation = (renderer.rotation +
+                                    (event.x - previousX) * 0.35f) % 360f
+                                previousX = event.x
+                            }
+                            true
+                        }
+                        MotionEvent.ACTION_POINTER_UP -> {
+                            previousDistance = 0f
+                            previousX = event.getX(0)
+                            true
+                        }
+                        else -> true
                     }
-                    true
                 }
+                surface[0] = this
             }
         },
     )
@@ -56,6 +101,7 @@ private class EveFigureRenderer : GLSurfaceView.Renderer {
     @Volatile var lookY = 0f
     @Volatile var mode = "IDLE"
     @Volatile var rotation = 0f
+    @Volatile var distance = 7.7f
     private var program = 0
     private var vertexAttr = 0
     private var matrixUniform = 0
@@ -108,11 +154,12 @@ private class EveFigureRenderer : GLSurfaceView.Renderer {
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
         GLES20.glViewport(0, 0, width, height)
         Matrix.perspectiveM(projection, 0, 37f, width.toFloat() / height.coerceAtLeast(1), 0.1f, 30f)
-        Matrix.setLookAtM(view, 0, 0f, 0.1f, 7.7f, 0f, 0f, 0f, 0f, 1f, 0f)
+
     }
 
     override fun onDrawFrame(gl: GL10?) {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
+        Matrix.setLookAtM(view, 0, 0f, 0.1f, distance, 0f, 0f, 0f, 0f, 1f, 0f)
         GLES20.glUseProgram(program)
         GLES20.glUniform3f(lightUniform, -0.45f, 0.8f, 1f)
         GLES20.glEnableVertexAttribArray(vertexAttr)
@@ -120,6 +167,7 @@ private class EveFigureRenderer : GLSurfaceView.Renderer {
         val t = (System.nanoTime() - start) / 1_000_000_000f
         val breathe = sin(t * 1.5f) * 0.025f
         val sway = sin(t * 0.7f) * 1.5f
+        val blinking = (t % 4.3f) < 0.14f
         val white = floatArrayOf(0.84f, 0.89f, 0.97f, 1f)
         val pearl = floatArrayOf(0.58f, 0.72f, 0.91f, 1f)
         val skin = floatArrayOf(0.94f, 0.73f, 0.62f, 1f)
@@ -146,8 +194,8 @@ private class EveFigureRenderer : GLSurfaceView.Renderer {
         part(0f, 1.37f, -0.10f, 0.32f, 0.24f, 0.27f, blonde)
         for (side in listOf(-1f, 1f)) {
             part(side * 0.29f, 0.99f, -0.08f, 0.13f, 0.46f, 0.15f, blonde, side * 9f)
-            part(side * 0.12f, 1.13f, 0.249f, 0.075f, 0.046f, 0.027f, white)
-            part(side * 0.12f + lookX * 0.015f, 1.13f + lookY * 0.012f, 0.272f, 0.034f, 0.036f, 0.018f, iris)
+            part(side * 0.12f, 1.13f, 0.249f, 0.075f, if (blinking) 0.004f else 0.046f, 0.027f, white)
+            if (!blinking) part(side * 0.12f + lookX * 0.015f, 1.13f + lookY * 0.012f, 0.272f, 0.034f, 0.036f, 0.018f, iris)
             part(side * 0.47f, 0.15f, 0f, 0.15f, 0.42f, 0.16f, white, side * 15f)
             part(side * 0.59f, -0.48f, 0f, 0.115f, 0.39f, 0.12f, pearl, side * 6f)
             part(side * 0.62f, -0.91f, 0f, 0.10f, 0.13f, 0.11f, skin)
