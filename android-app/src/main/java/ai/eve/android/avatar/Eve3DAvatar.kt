@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import android.view.MotionEvent
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
@@ -32,6 +36,23 @@ fun Eve3DAvatar(state: AvatarStateHolder, modifier: Modifier = Modifier) {
     renderer.mode = state.currentMode.name
     renderer.lookX = state.lookX
     renderer.lookY = state.lookY
+    renderer.emotion = state.emotion.name
+    val surface = remember { arrayOfNulls<GLSurfaceView>(1) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> surface[0]?.onResume()
+                Lifecycle.Event.ON_PAUSE -> surface[0]?.onPause()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            surface[0]?.onPause()
+        }
+    }
     AndroidView(
         modifier = modifier.fillMaxWidth().height(350.dp),
         factory = { context ->
@@ -39,12 +60,51 @@ fun Eve3DAvatar(state: AvatarStateHolder, modifier: Modifier = Modifier) {
                 setEGLContextClientVersion(2)
                 setRenderer(renderer)
                 renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
+                var previousX = 0f
+                var previousDistance = 0f
                 setOnTouchListener { _, event ->
-                    if (event.action == android.view.MotionEvent.ACTION_MOVE) {
-                        renderer.rotation += event.historySize.let { 0.7f }
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            previousX = event.x
+                            true
+                        }
+                        MotionEvent.ACTION_POINTER_DOWN -> {
+                            if (event.pointerCount >= 2) {
+                                previousDistance = kotlin.math.hypot(
+                                    event.getX(1) - event.getX(0),
+                                    event.getY(1) - event.getY(0),
+                                )
+                            }
+                            true
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            if (event.pointerCount >= 2) {
+                                val distance = kotlin.math.hypot(
+                                    event.getX(1) - event.getX(0),
+                                    event.getY(1) - event.getY(0),
+                                )
+                                if (previousDistance > 0f) {
+                                    renderer.distance = (renderer.distance * previousDistance /
+                                        distance.coerceAtLeast(1f)).coerceIn(5.5f, 11f)
+                                }
+                                previousDistance = distance
+                            } else {
+                                renderer.rotation = (renderer.rotation +
+                                    (event.x - previousX) * 0.35f) % 360f
+                                previousX = event.x
+                            }
+                            true
+                        }
+                        MotionEvent.ACTION_POINTER_UP -> {
+                            previousDistance = 0f
+                            previousX = event.getX(0)
+                            true
+                        }
+                        else -> true
                     }
-                    true
                 }
+                surface[0] = this
+                if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) onResume()
             }
         },
     )
@@ -55,7 +115,9 @@ private class EveFigureRenderer : GLSurfaceView.Renderer {
     @Volatile var lookX = 0f
     @Volatile var lookY = 0f
     @Volatile var mode = "IDLE"
+    @Volatile var emotion = "NEUTRAL"
     @Volatile var rotation = 0f
+    @Volatile var distance = 7.7f
     private var program = 0
     private var vertexAttr = 0
     private var matrixUniform = 0
@@ -108,11 +170,12 @@ private class EveFigureRenderer : GLSurfaceView.Renderer {
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
         GLES20.glViewport(0, 0, width, height)
         Matrix.perspectiveM(projection, 0, 37f, width.toFloat() / height.coerceAtLeast(1), 0.1f, 30f)
-        Matrix.setLookAtM(view, 0, 0f, 0.1f, 7.7f, 0f, 0f, 0f, 0f, 1f, 0f)
+
     }
 
     override fun onDrawFrame(gl: GL10?) {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
+        Matrix.setLookAtM(view, 0, 0f, 0.1f, distance, 0f, 0f, 0f, 0f, 1f, 0f)
         GLES20.glUseProgram(program)
         GLES20.glUniform3f(lightUniform, -0.45f, 0.8f, 1f)
         GLES20.glEnableVertexAttribArray(vertexAttr)
@@ -120,12 +183,22 @@ private class EveFigureRenderer : GLSurfaceView.Renderer {
         val t = (System.nanoTime() - start) / 1_000_000_000f
         val breathe = sin(t * 1.5f) * 0.025f
         val sway = sin(t * 0.7f) * 1.5f
+        val blinking = (t % 4.3f) < 0.14f
+        val speaking = mode == "SPEAKING"
+        val listening = mode == "LISTENING"
+        val thinking = mode == "THINKING"
+        val armGesture = if (speaking) sin(t * 3.2f) * 14f else if (listening) 5f else 0f
+        val talkMouth = if (speaking) 0.12f + 0.17f * kotlin.math.abs(sin(t * 8f)) else 0f
         val white = floatArrayOf(0.84f, 0.89f, 0.97f, 1f)
         val pearl = floatArrayOf(0.58f, 0.72f, 0.91f, 1f)
         val skin = floatArrayOf(0.94f, 0.73f, 0.62f, 1f)
         val blonde = floatArrayOf(0.82f, 0.60f, 0.24f, 1f)
         val dark = floatArrayOf(0.12f, 0.19f, 0.26f, 1f)
         val iris = floatArrayOf(0.24f, 0.52f, 0.37f, 1f)
+        val lips = floatArrayOf(0.67f, 0.28f, 0.32f, 1f)
+        val happy = emotion == "HAPPY"
+        val concerned = emotion == "CONCERNED" || emotion == "SAD"
+        val browLift = if (emotion == "SURPRISED") 0.055f else if (concerned) -0.035f else 0f
         fun part(x: Float, y: Float, z: Float, sx: Float, sy: Float, sz: Float, color: FloatArray, tilt: Float = 0f) {
             Matrix.setIdentityM(model, 0)
             Matrix.rotateM(model, 0, rotation + sway, 0f, 1f, 0f)
@@ -144,20 +217,26 @@ private class EveFigureRenderer : GLSurfaceView.Renderer {
         part(0f, 0.67f, 0f, 0.12f, 0.18f, 0.12f, skin)
         part(0f, 1.10f, 0f, 0.28f, 0.37f, 0.27f, skin)
         part(0f, 1.37f, -0.10f, 0.32f, 0.24f, 0.27f, blonde)
+        for (strand in 0..8) {
+            val x = (strand - 4) * 0.075f
+            val z = -0.18f - 0.055f * cos(strand * 0.75f)
+            part(x, 0.76f - 0.07f * sin(strand * 1.3f), z, 0.06f, 0.65f, 0.075f, blonde, (strand - 4) * 3f)
+        }
         for (side in listOf(-1f, 1f)) {
             part(side * 0.29f, 0.99f, -0.08f, 0.13f, 0.46f, 0.15f, blonde, side * 9f)
-            part(side * 0.12f, 1.13f, 0.249f, 0.075f, 0.046f, 0.027f, white)
-            part(side * 0.12f + lookX * 0.015f, 1.13f + lookY * 0.012f, 0.272f, 0.034f, 0.036f, 0.018f, iris)
-            part(side * 0.47f, 0.15f, 0f, 0.15f, 0.42f, 0.16f, white, side * 15f)
-            part(side * 0.59f, -0.48f, 0f, 0.115f, 0.39f, 0.12f, pearl, side * 6f)
+            part(side * 0.12f, 1.13f, 0.249f, 0.075f, if (blinking) 0.004f else 0.046f, 0.027f, white)
+            part(side * 0.12f, 1.21f + browLift, 0.235f, 0.092f, 0.015f, 0.023f, blonde, side * (if (concerned) 12f else -5f))
+            if (!blinking) part(side * 0.12f + lookX * 0.015f, 1.13f + lookY * 0.012f, 0.272f, 0.034f, 0.036f, 0.018f, iris)
+            part(side * 0.47f, 0.15f, 0f, 0.15f, 0.42f, 0.16f, white, side * (15f + armGesture))
+            part(side * 0.59f, -0.48f, 0f, 0.115f, 0.39f, 0.12f, pearl, side * (6f + armGesture * 0.4f))
             part(side * 0.62f, -0.91f, 0f, 0.10f, 0.13f, 0.11f, skin)
             part(side * 0.18f, -1.08f, 0f, 0.19f, 0.51f, 0.20f, white, side * 3f)
             part(side * 0.18f, -1.90f, 0f, 0.14f, 0.49f, 0.16f, pearl)
             part(side * 0.18f, -2.40f, 0.10f, 0.17f, 0.13f, 0.30f, dark)
         }
         part(0f, 0.94f, 0.257f, 0.044f, 0.065f, 0.055f, skin)
-        part(0f, 0.83f, 0.258f, 0.092f, 0.012f + mouth * 0.045f, 0.019f, dark)
-        if (mode == "LISTENING" || mode == "THINKING") {
+        part(0f, 0.83f, 0.258f, if (happy) 0.115f else 0.092f, 0.012f + (mouth + talkMouth).coerceAtMost(1f) * 0.045f, 0.019f, lips)
+        if (listening || thinking) {
             part(0f, 0.34f, 0.25f, 0.075f, 0.075f, 0.045f, iris)
         }
         GLES20.glDisableVertexAttribArray(vertexAttr)
