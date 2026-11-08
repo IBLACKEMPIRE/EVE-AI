@@ -36,6 +36,7 @@ fun Eve3DAvatar(state: AvatarStateHolder, modifier: Modifier = Modifier) {
     renderer.mode = state.currentMode.name
     renderer.lookX = state.lookX
     renderer.lookY = state.lookY
+    renderer.emotion = state.emotion.name
     val surface = remember { arrayOfNulls<GLSurfaceView>(1) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -114,6 +115,7 @@ private class EveFigureRenderer : GLSurfaceView.Renderer {
     @Volatile var lookX = 0f
     @Volatile var lookY = 0f
     @Volatile var mode = "IDLE"
+    @Volatile var emotion = "NEUTRAL"
     @Volatile var rotation = 0f
     @Volatile var distance = 7.7f
     private var program = 0
@@ -193,6 +195,10 @@ private class EveFigureRenderer : GLSurfaceView.Renderer {
         val blonde = floatArrayOf(0.82f, 0.60f, 0.24f, 1f)
         val dark = floatArrayOf(0.12f, 0.19f, 0.26f, 1f)
         val iris = floatArrayOf(0.24f, 0.52f, 0.37f, 1f)
+        val lips = floatArrayOf(0.67f, 0.28f, 0.32f, 1f)
+        val happy = emotion == "HAPPY"
+        val concerned = emotion == "CONCERNED" || emotion == "SAD"
+        val browLift = if (emotion == "SURPRISED") 0.055f else if (concerned) -0.035f else 0f
         fun part(x: Float, y: Float, z: Float, sx: Float, sy: Float, sz: Float, color: FloatArray, tilt: Float = 0f) {
             Matrix.setIdentityM(model, 0)
             Matrix.rotateM(model, 0, rotation + sway, 0f, 1f, 0f)
@@ -211,9 +217,15 @@ private class EveFigureRenderer : GLSurfaceView.Renderer {
         part(0f, 0.67f, 0f, 0.12f, 0.18f, 0.12f, skin)
         part(0f, 1.10f, 0f, 0.28f, 0.37f, 0.27f, skin)
         part(0f, 1.37f, -0.10f, 0.32f, 0.24f, 0.27f, blonde)
+        for (strand in 0..8) {
+            val x = (strand - 4) * 0.075f
+            val z = -0.18f - 0.055f * cos(strand * 0.75f)
+            part(x, 0.76f - 0.07f * sin(strand * 1.3f), z, 0.06f, 0.65f, 0.075f, blonde, (strand - 4) * 3f)
+        }
         for (side in listOf(-1f, 1f)) {
             part(side * 0.29f, 0.99f, -0.08f, 0.13f, 0.46f, 0.15f, blonde, side * 9f)
             part(side * 0.12f, 1.13f, 0.249f, 0.075f, if (blinking) 0.004f else 0.046f, 0.027f, white)
+            part(side * 0.12f, 1.21f + browLift, 0.235f, 0.092f, 0.015f, 0.023f, blonde, side * (if (concerned) 12f else -5f))
             if (!blinking) part(side * 0.12f + lookX * 0.015f, 1.13f + lookY * 0.012f, 0.272f, 0.034f, 0.036f, 0.018f, iris)
             part(side * 0.47f, 0.15f, 0f, 0.15f, 0.42f, 0.16f, white, side * (15f + armGesture))
             part(side * 0.59f, -0.48f, 0f, 0.115f, 0.39f, 0.12f, pearl, side * (6f + armGesture * 0.4f))
@@ -223,7 +235,7 @@ private class EveFigureRenderer : GLSurfaceView.Renderer {
             part(side * 0.18f, -2.40f, 0.10f, 0.17f, 0.13f, 0.30f, dark)
         }
         part(0f, 0.94f, 0.257f, 0.044f, 0.065f, 0.055f, skin)
-        part(0f, 0.83f, 0.258f, 0.092f, 0.012f + (mouth + talkMouth).coerceAtMost(1f) * 0.045f, 0.019f, dark)
+        part(0f, 0.83f, 0.258f, if (happy) 0.115f else 0.092f, 0.012f + (mouth + talkMouth).coerceAtMost(1f) * 0.045f, 0.019f, lips)
         if (listening || thinking) {
             part(0f, 0.34f, 0.25f, 0.075f, 0.075f, 0.045f, iris)
         }
