@@ -47,7 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import ai.eve.android.avatar.PlaceholderAvatar
+import ai.eve.android.avatar.Eve3DAvatar
 import java.text.DateFormat
 import java.util.Date
 
@@ -126,7 +126,7 @@ private fun ChatScreen(vm: EveViewModel) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.End) {
             TextButton({ vm.avatarVisible = !vm.avatarVisible }) { Text(if (vm.avatarVisible) "Hide avatar" else "Show avatar") }
         }
-        if (vm.avatarVisible) PlaceholderAvatar(vm.avatar)
+        if (vm.avatarVisible) Eve3DAvatar(vm.avatar)
         LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp), state = listState) {
             items(vm.lines) { line -> Bubble(line) }
             if (vm.busy) item { Text("EVE is thinking…", Modifier.padding(8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
