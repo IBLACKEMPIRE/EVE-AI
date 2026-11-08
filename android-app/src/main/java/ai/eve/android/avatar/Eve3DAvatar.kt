@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LifecycleResumeEffect
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import android.view.MotionEvent
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -35,9 +37,20 @@ fun Eve3DAvatar(state: AvatarStateHolder, modifier: Modifier = Modifier) {
     renderer.lookX = state.lookX
     renderer.lookY = state.lookY
     val surface = remember { arrayOfNulls<GLSurfaceView>(1) }
-    LifecycleResumeEffect(renderer) {
-        surface[0]?.onResume()
-        onPauseOrDispose { surface[0]?.onPause() }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> surface[0]?.onResume()
+                Lifecycle.Event.ON_PAUSE -> surface[0]?.onPause()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            surface[0]?.onPause()
+        }
     }
     AndroidView(
         modifier = modifier.fillMaxWidth().height(350.dp),
@@ -90,6 +103,7 @@ fun Eve3DAvatar(state: AvatarStateHolder, modifier: Modifier = Modifier) {
                     }
                 }
                 surface[0] = this
+                if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) onResume()
             }
         },
     )
