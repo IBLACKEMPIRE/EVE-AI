@@ -182,6 +182,11 @@ private class EveFigureRenderer : GLSurfaceView.Renderer {
         val breathe = sin(t * 1.5f) * 0.025f
         val sway = sin(t * 0.7f) * 1.5f
         val blinking = (t % 4.3f) < 0.14f
+        val speaking = mode == "SPEAKING"
+        val listening = mode == "LISTENING"
+        val thinking = mode == "THINKING"
+        val armGesture = if (speaking) sin(t * 3.2f) * 14f else if (listening) 5f else 0f
+        val talkMouth = if (speaking) 0.12f + 0.17f * kotlin.math.abs(sin(t * 8f)) else 0f
         val white = floatArrayOf(0.84f, 0.89f, 0.97f, 1f)
         val pearl = floatArrayOf(0.58f, 0.72f, 0.91f, 1f)
         val skin = floatArrayOf(0.94f, 0.73f, 0.62f, 1f)
@@ -210,16 +215,16 @@ private class EveFigureRenderer : GLSurfaceView.Renderer {
             part(side * 0.29f, 0.99f, -0.08f, 0.13f, 0.46f, 0.15f, blonde, side * 9f)
             part(side * 0.12f, 1.13f, 0.249f, 0.075f, if (blinking) 0.004f else 0.046f, 0.027f, white)
             if (!blinking) part(side * 0.12f + lookX * 0.015f, 1.13f + lookY * 0.012f, 0.272f, 0.034f, 0.036f, 0.018f, iris)
-            part(side * 0.47f, 0.15f, 0f, 0.15f, 0.42f, 0.16f, white, side * 15f)
-            part(side * 0.59f, -0.48f, 0f, 0.115f, 0.39f, 0.12f, pearl, side * 6f)
+            part(side * 0.47f, 0.15f, 0f, 0.15f, 0.42f, 0.16f, white, side * (15f + armGesture))
+            part(side * 0.59f, -0.48f, 0f, 0.115f, 0.39f, 0.12f, pearl, side * (6f + armGesture * 0.4f))
             part(side * 0.62f, -0.91f, 0f, 0.10f, 0.13f, 0.11f, skin)
             part(side * 0.18f, -1.08f, 0f, 0.19f, 0.51f, 0.20f, white, side * 3f)
             part(side * 0.18f, -1.90f, 0f, 0.14f, 0.49f, 0.16f, pearl)
             part(side * 0.18f, -2.40f, 0.10f, 0.17f, 0.13f, 0.30f, dark)
         }
         part(0f, 0.94f, 0.257f, 0.044f, 0.065f, 0.055f, skin)
-        part(0f, 0.83f, 0.258f, 0.092f, 0.012f + mouth * 0.045f, 0.019f, dark)
-        if (mode == "LISTENING" || mode == "THINKING") {
+        part(0f, 0.83f, 0.258f, 0.092f, 0.012f + (mouth + talkMouth).coerceAtMost(1f) * 0.045f, 0.019f, dark)
+        if (listening || thinking) {
             part(0f, 0.34f, 0.25f, 0.075f, 0.075f, 0.045f, iris)
         }
         GLES20.glDisableVertexAttribArray(vertexAttr)
